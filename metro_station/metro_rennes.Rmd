@@ -1,0 +1,113 @@
+---
+title: "Manipulating Spatial Data"
+output: statsr:::statswithr_lab
+---
+<div id="Introduction">
+This tutorial aims to explain some **useful functions for manipulating spatial data using some packages**.
+
+</div>
+
+#### WORKING WITH SPATIAL DATA
+
+First, let's start by loading the required packages:
+```{r message=FALSE, warning=FALSE}
+library(rgdal)
+library(data.table)
+library(tidyverse)
+library(leaflet)
+library(leaflet.extras)
+library(htmltools)
+library(htmlwidgets)
+```
+
+#### ACCESSING THE DATA
+  One way to read spatial data is to use `readOGR()` function from `rgdal` package. the `(.)` refers to the `current working directory` where the shapefile is stored. The second argument refers to `the name of the shapefile whitout the extension.
+  
+```{r}
+metro <- readOGR(".", "metro_station")
+```
+
+```{r}
+summary(metro)
+```
+
+  The summary shows that the shapefile is a `SpatialPointsDataFrame`, followed by the `Coordinate System` information, `proj4string` and finally the `data frame`.
+
+  Another way to read shapefiles is to use `readShapeSpatial("metro_station")` function from `maptools` package. This latter doesn't display the `Coordiante System (CS)` information.
+
+  The function `read_sf("metro_station")` from the `sp` package allows to read shapefiles and displays the data as a tibble.  
+
+  The `@` allows to access the data frame like bellow. Another way to access the data frame is `data.frame(metro)`. 
+The name of some columns has changed in order to be reconized by the package leaflet later.
+The data frame below shows the 4 most important variables or columns:
+
+  + `nom` refers to the name of metro stops;
+  + `ligne` refers to the metro line;
+  + `lon` refers to the longitude of each stop;
+  + `lat` refers to the latitude of each stop.
+
+```{r echo=FALSE}
+metro_df <- metro@data
+setnames(metro_df, old = c("x_wgs84", "y_wgs84"), new = c("lon", "lat"))
+head(metro_df)
+```
+
+#### MAPPING SPATIAL DATA
+  Many packages have been developped to map spatial data. `leaflet` is an open source JavaScript library for creating interactive maps. 
+leaflet uses tiles. Tiled web maps join many map images together and when a user zooms or pans an interactive leaflet map, new tiles are fetched as needed to provide the requested view of the map.
+
+In the code below, an html widget has been initialized with `leaflet()` function call. Notic that leaflet leverages the pipe operator that is common in the `tidyverse`. This allows to chain a series of functions together. 
+`addTiles()` adds a map tile and by adding `addMarkers()`, the web map will place a blue drop pin at the coordinates with the specific name(nom) shown when pointing into a particular coordinate.
+leaflet() reconizes automatically the lon at lat in the data frame.
+
+```{r fig.width=10, fig.height=8, message=FALSE, warning=FALSE}
+metro_df %>%
+  leaflet() %>%
+  addTiles() %>%
+  addMarkers(popup = ~nom)
+```
+
+As shown above, all the points are displayed and there is no way to select just one type of metro line.
+To be more flexible, we subset the data based on a particular metro line by using `filter(ligne == "x")` and add each in the `addCircleMarkers()` as shown later. In this case, the full data frame will be removed from the code.
+
+```{r echo=FALSE}
+ligne_a <- metro_df %>%
+  filter(ligne == "a")
+```
+
+```{r echo=FALSE}
+ligne_b <- metro_df %>%
+  filter(ligne == "b")
+```
+
+The leaflet package comes with `more than 100 map tiles`. These tiles are stored in a list called `providers` and can be added to a map using `addProviderTiles() instead of addTiles()`.
+`addCircleMarkers()` id very useful when we have many points to display and can replace `addMarkers()` function.
+`addLayersControl()` adds a control map to select the metro line we like to visualize or a particular tile. 
+```{r echo=FALSE, message=FALSE, fig.width=10, fig.height=8}
+pal <- colorFactor(palette = c("darkgreen", "darkblue"), levels = c("a", "b"))
+
+m <- leaflet() %>%
+  addSearchOSM() %>% 
+  addTiles(group = "OSM") %>%
+  
+  
+  addProviderTiles("CartoDB", group = "Carto") %>%
+  addProviderTiles("Esri", group = "Esri") %>%
+  addCircleMarkers(data = ligne_a, radius = 5, col = ~pal(ligne), label = ~htmlEscape(nom), group = "a") %>%
+  addCircleMarkers(data = ligne_b, radius = 5, col = ~pal(ligne), label = ~htmlEscape(nom), group = "b") %>% 
+  addLayersControl(baseGroups = c("OSM", "CartoDB", "Esri"), overlayGroups = c("a", "b")) %>%
+  addLegend(pal = pal, values = c("a", "b"), opacity = 0.5, title = "Ligne", position = "topright") 
+
+m
+```
+
+After storing a leaflet map in an object, the `saveWidget()` function from `htmlwidgets` allows to write the map to an html file and store it locally or on a server.
+```{r}
+saveWidget(m, file = "metroMap.html")
+```
+
+
+
+
+
+

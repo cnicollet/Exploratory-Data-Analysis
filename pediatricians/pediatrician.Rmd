@@ -1,0 +1,109 @@
+---
+title: "Price applied by Pediatricians"
+output: statsr:::statswithr_lab
+---
+<div id="instructions">
+In this section, we are going to analyze the  **pediatrician data set**, and try to answer some **Questions**. 
+</div>
+
+People visit pediatricians frequently when they become parents. Sometimes, they struggle to find the best doctor or to have an appointment. In France, the main thing to watch out for is whether or not your doctor is ‘conventionné’, and if so, which type of ‘convention’ he has, Sector 1 or Sector 2.
+So for basic health insurance reimbursement, there is a price guideline which all doctors who choose to be in ‘Secteur 1’ have to stand by. 
+If a doctor is ‘Secteur 2’, he or she can choose to make the consultation more expensive. if a doctor is ‘non-conventionné’ (sometimes also called ‘Secteur 3’) he is entirely free to choose his own prices and free to ignore all government guidelines. 
+
+We'll start by loading the required libraries for our project. Then we'll focus on some useful functions from the dplyr package for **Data Transformation**
+
+The data set we will be analysing consists of 94 pediatricians from differents cities in France. It has 94 rows or observations and 6 variables as shown below:
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(openxlsx)
+library(data.table)
+library(tidyverse)
+```
+
+```{r setup, echo=FALSE}
+pediatrician <- read.xlsx("pediatrician.xlsx", detectDates = T)
+pediatrician$`Date.Rendez-vous`[6] <- pediatrician$`Date.Rendez-vous`[6] <- "2012-10-10"
+pediatrician$`Date.Rendez-vous` <- as.Date(pediatrician$`Date.Rendez-vous`)
+setnames(pediatrician, old = c("Ville", "Date.appel", "Date.Rendez-vous", "Délai.rendez-vous", "Tarif", "Dépassement.d'honoraires"), new = c("city", "call_date", "rdv_date", "diff_call_rdv", "price", "extra_price"))
+pediatrician <- as_tibble(pediatrician)
+head(pediatrician)
+```
+
+Let's create a column "extra_applied" to distinguish those with extra price from those without extra price.
+```{r echo=FALSE}
+pediatrician <- pediatrician %>%
+  dplyr::mutate(extra_applied = ifelse(extra_price == 0, "No", "Yes"))
+```
+
+The percentage of doctors who applied extra price (so they are not from "sector1") is **44%** as shown below.
+```{r echo=FALSE}
+round(prop.table(table(pediatrician$extra_applied == "Yes")), 2) * 100
+```
+
+#### ANALYSING THE SUMMARY STATISTICS AND THE GRAPHS:
+The summary and the histograms show that diff_call_rdv, price and extra_price are right skewed. 
+diff_call_rdv: the median difference between calling for a appointment and going to a doctor is ~ 11 days, but sometimes the difference can be very high (max = 90 days).
+price: half of the doctors apply **the standard price 28 euros**. Notice that we can see a big variation among the price applied by doctors (max 75 euros for cost versus 28 euros).
+extra_price: half of the doctors don't apply extra price(which is confirmed by the standard price applied), but others can increase higher the extra price(max 47 euros).
+
+```{r echo=FALSE,message=FALSE, warning=FALSE}
+summary(pediatrician[, 4:6])
+ggplot(pediatrician, aes(x = diff_call_rdv)) + geom_histogram(fill = "darkred") + ggtitle("Distribution of days between call for a rdv and an appointment") + xlab("difference (days)")
+ggplot(pediatrician, aes(x = price)) + geom_histogram(fill = "lightgreen") + ggtitle("Distribution of Price") + xlab("price (euros)")
+ggplot(pediatrician, aes(x = extra_price)) + geom_histogram(fill = "lightblue") + ggtitle(("Distribution of Extra Price")) + xlab("extra_price applied (euros)")
+```
+
+the result below shows that it take longer to obtain appointment with physicians who don't apply extra price than those who apply extra price. Maybe because patients prefer cheaper physicians rather than paying extra, so it is hard to have a place.
+```{r echo=FALSE}
+pediatrician %>% 
+  group_by(extra_applied) %>% 
+  dplyr::summarise(avg_days = round(mean(diff_call_rdv), 2))
+```
+
+Notice that the **price per visit when no extra_price applied is 28 euros**. This is in fact the price we pay in France. This is confirmed by the boxplot displayed below.
+Whereas, the price goes higher when extra is applied: **patients pay on average ~ 42 euros and sometimes much higher(75 euros)**.
+
+```{r echo=FALSE}
+pediatrician %>%
+  group_by(extra_applied) %>%
+  dplyr::summarize(median_price = round(median(price), 2), mean_price = round(mean(price), 2), sd_price = round(sd(price), 2), max_price = round(max(price), 2))
+```
+
+```{r echo=FALSE}
+ggplot(pediatrician, aes(x = extra_applied, y = price, fill = extra_applied)) + geom_boxplot() + ggtitle("Distribution of Price Per Group") + xlab("extra applied") + ylab("price (euros)") 
+```
+
+**On average, physicians apply 13.91 euros extra to their patients **(table and boxplot below). we can see that **there is an outlier in extra_price > 40 euros **. This means that one physician applied high extra price to his patient.
+
+
+```{r echo=FALSE}
+pediatrician %>% 
+  group_by(extra_applied) %>%
+  dplyr::summarize(avg_extra = mean(extra_price))
+```
+
+```{r echo=FALSE}
+ggplot(pediatrician, aes(x = extra_applied, y = extra_price, fill = extra_applied)) + geom_boxplot() + ggtitle("Distribution of Extra Price per group") + xlab("extra applied") + ylab("extra price (euros)") + ylim(c(0, 50))
+```
+
+We can see that the doctor who applied the **highest price (75 euros) and the highest extra (47 euros) lives in NIMES**.
+```{r echo=FALSE}
+pediatrician %>%
+  filter(extra_price > 40)
+```
+
+After grouping by City (result below), we can see that the average price applied is 55 euros in CERGY. We notice that some cities have just one data point (CERGY has just one data point, so we can't say that it has the highest price applied by a doctor). So, we cannot draw any conclusion about the difference in prices applied in each City.
+```{r echo=FALSE}
+pediatrician %>%
+  dplyr::select(c(city, price, extra_price, extra_applied)) %>%
+  group_by(city) %>%
+  filter(extra_applied == "Yes") %>%
+  dplyr::summarize(total = n(), avg_price = round(mean(price), 2),
+                   avg_extra = round(mean(extra_price), 2)) %>%
+  arrange(desc(avg_price))
+```
+
+--------------------------------
+### CONCLUSION:
+From this small data set we can see that pediatricians applies different prices: 28 euros for sector1, and higher for other sectors.
+It would be more interesting to see the average extra cost per city, but we don't have enough data to see the difference. Applying extra cost for patients (extra price) might be influenced by several factors: the area(prices applied in big cities are diffrent from the countryside), experience of physicians, speciality, number of physicians in a particular area, private or public, sector1, 2 or 3, total population around, their income, etc.
+
